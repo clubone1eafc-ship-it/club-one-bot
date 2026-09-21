@@ -1,0 +1,10 @@
+name = "club-one-bot-v2"
+main = "club-one-bot-v2.js"
+compatibility_date = "2026-09-13"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "APP_KV"
+id = "YOUR_KV_NAMESPACE_ID"
