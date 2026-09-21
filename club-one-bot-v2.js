@@ -24,6 +24,8 @@ const ACTIVITY_TIMES = ["22:00", "22:30", "23:00以降", "未定（連絡くだ�
 
 const DEFAULTS = {
   weeklyChannelId: "",
+  memberRoleId: "1200600144597495879",
+  supportRoleId: "1212433528793473096",
   operationChannelId: "",
   announcementChannelId: "",
   weeklyStartDay: 5, // Friday, 0=Sunday
@@ -57,8 +59,34 @@ export default {
       if (request.method === "GET") {
         const url = new URL(request.url);
         if (url.pathname === "/register-commands") {
-          await registerCommands(env);
-          return text("Commands registered.");
+          try {
+            await registerCommands(env);
+            return json({ ok: true, message: "Commands registered." });
+          } catch (e) {
+            console.error("register-commands", e);
+            return json({
+              ok: false,
+              error: String(e?.message || e),
+              config: {
+                applicationId: !!env.DISCORD_APPLICATION_ID,
+                guildId: !!env.DISCORD_GUILD_ID,
+                token: !!env.DISCORD_TOKEN,
+              }
+            }, 500);
+          }
+        }
+        if (url.pathname === "/health") {
+          return json({
+            ok: true,
+            version: "v2",
+            env: {
+              applicationId: !!env.DISCORD_APPLICATION_ID,
+              guildId: !!env.DISCORD_GUILD_ID,
+              publicKey: !!env.DISCORD_PUBLIC_KEY,
+              token: !!env.DISCORD_TOKEN,
+              kv: !!env.APP_KV
+            }
+          });
         }
         return text("Club One Bot v2 is running!");
       }
@@ -636,7 +664,12 @@ async function sendWeeklyReminders(env,weekKey) {
   const s=await getSettings(env); const w=await getWeekly(env,weekKey); const start=weekDates(weekKey)[0]; const end=weekDates(weekKey)[6]; const members=await listGuildMembers(env); for(const m of members){const cat=categoryFromMember(m,s);if(![CATEGORY.MEMBER,CATEGORY.SUPPORT].includes(cat))continue;const registered=weekDates(weekKey).some(d=>w.days[d]?.[m.user.id]);if(!registered)await dm(env,m.user.id,"📅 Club Oneの来週予定がまだ登録されていません。予定登録用チャンネルから登録してください。");}
 }
 async function sendDayConfirmations(env,date) {
-  const a=await getActivity(env,date); if(a.status!=="recruiting"&&a.status!=="active")return; for(const p of Object.values(a.participants)){if(p.status==="cancelled"||p.external||p.time==="22:00")continue;if(p.source==="weekly-auto"&&p.userId)await dm(env,p.userId,`⚽ 本日のClub One活動\n📅 ${date}\n\n参加時間を選択してください。`,activityDmButtons(date));}
+  const a=await getActivity(env,date);
+  if(a.status!=="recruiting"&&a.status!=="active") return;
+  for(const p of Object.values(a.participants)){
+    if(p.status==="cancelled"||p.external||!p.userId||p.time==="22:00") continue;
+    await dm(env,p.userId,`⚽ 本日のClub One活動\n📅 ${date}\n\n参加時間を選択してください。`,activityDmButtons(date));
+  }
 }
 function activityDmButtons(date){return chunkRows(ACTIVITY_TIMES.map(t=>button(`activity:confirm:${date}:${encodeURIComponent(t)}`,t,t==="不参加"?4:3)),5);}
 async function listGuildMembers(env){const out=[];for(let after="0";;){const page=await discordRequest(env,`/guilds/${env.DISCORD_GUILD_ID}/members?limit=1000&after=${after}`);if(!page.length)break;out.push(...page);if(page.length<1000)break;after=page[page.length-1].user.id;}return out;}
