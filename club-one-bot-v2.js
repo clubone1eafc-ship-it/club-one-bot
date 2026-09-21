@@ -24,8 +24,6 @@ const ACTIVITY_TIMES = ["22:00", "22:30", "23:00以降", "未定（連絡くだ�
 
 const DEFAULTS = {
   weeklyChannelId: "",
-  memberRoleId: "1200600144597495879",
-  supportRoleId: "1212433528793473096",
   operationChannelId: "",
   announcementChannelId: "",
   weeklyStartDay: 5, // Friday, 0=Sunday
@@ -59,34 +57,8 @@ export default {
       if (request.method === "GET") {
         const url = new URL(request.url);
         if (url.pathname === "/register-commands") {
-          try {
-            await registerCommands(env);
-            return json({ ok: true, message: "Commands registered." });
-          } catch (e) {
-            console.error("register-commands", e);
-            return json({
-              ok: false,
-              error: String(e?.message || e),
-              config: {
-                applicationId: !!env.DISCORD_APPLICATION_ID,
-                guildId: !!env.DISCORD_GUILD_ID,
-                token: !!env.DISCORD_TOKEN,
-              }
-            }, 500);
-          }
-        }
-        if (url.pathname === "/health") {
-          return json({
-            ok: true,
-            version: "v2",
-            env: {
-              applicationId: !!env.DISCORD_APPLICATION_ID,
-              guildId: !!env.DISCORD_GUILD_ID,
-              publicKey: !!env.DISCORD_PUBLIC_KEY,
-              token: !!env.DISCORD_TOKEN,
-              kv: !!env.APP_KV
-            }
-          });
+          await registerCommands(env);
+          return text("Commands registered.");
         }
         return text("Club One Bot v2 is running!");
       }
@@ -285,8 +257,9 @@ async function handleComponent(i, env) {
   if (id.startsWith("activity:start:")) return await activityStart(i, env, id.split(":")[2]);
   if (id.startsWith("activity:cancel:")) return await activityCancel(i, env, id.split(":")[2]);
   if (id.startsWith("activity:manage:")) return messageResponse(await buildActivityAdminText(env, id.split(":")[2]), activityManageButtons(id.split(":")[2]));
-  if (id.startsWith("activity:add-person:")) return ephemeral("区分を選択してください。", [row(button(`activity:add-person-as:${id.split(":")[2]}:trial`, "体験", 3), button(`activity:add-person-as:${id.split(":")[2]}:guest`, "ゲスト", 2))]);
-  if (id.startsWith("activity:add-person-as:")) return modalResponse(`activity-add-person:${id.split(":")[1]}:${id.split(":")[2]}`, "体験・ゲスト追加", [textInput("name", "名前"), textInput("time", "参加時間（任意）", "", false), textInput("note", "メモ（任意）", "", false)]);
+  if (id.startsWith("activity:add-person:")) return ephemeral("区分を選択してください。", [row(button(`activity:add-person-as-trial:${id.split(":")[2]}`, "体験", 3), button(`activity:add-person-as-guest:${id.split(":")[2]}`, "ゲスト", 2))]);
+  if (id.startsWith("activity:add-person-as-trial:")) return modalResponse(`activity-add-person-trial:${id.split(":")[1]}`, "体験追加", [textInput("name", "名前"), textInput("time", "参加時間（任意）", "", false), textInput("note", "メモ（任意）", "", false)]);
+  if (id.startsWith("activity:add-person-as-guest:")) return modalResponse(`activity-add-person-guest:${id.split(":")[1]}`, "ゲスト追加", [textInput("name", "名前"), textInput("time", "参加時間（任意）", "", false), textInput("note", "メモ（任意）", "", false)]);
   if (id.startsWith("activity:change:")) return activityChangePicker(i, env, id.split(":")[2]);
   if (id.startsWith("activity:confirm:")) return activityConfirmPicker(i, env, id.split(":")[2]);
   if (id.startsWith("activity:manual:")) return manualParticipantPicker(i, env, id.split(":")[2]);
@@ -298,8 +271,9 @@ async function handleComponent(i, env) {
   if (id.startsWith("practice:start:")) return practiceStart(i, env, id.split(":")[2]);
   if (id.startsWith("practice:post:")) return practicePostRecruitment(i, env, id.split(":")[2]);
   if (id.startsWith("practice:status:")) return practiceStatusPicker(i, env, id.split(":")[2]);
-  if (id.startsWith("practice:add:")) return ephemeral("区分を選択してください。", [row(button(`practice:add-as:${id.split(":")[2]}:trial`, "体験", 3), button(`practice:add-as:${id.split(":")[2]}:guest`, "ゲスト", 2))]);
-  if (id.startsWith("practice:add-as:")) return modalResponse(`practice-add:${id.split(":")[1]}:${id.split(":")[2]}`, "体験・ゲスト追加", [textInput("name", "名前"), textInput("time", "参加時間（任意）", "", false), textInput("note", "メモ（任意）", "", false)]);
+  if (id.startsWith("practice:add:")) return ephemeral("区分を選択してください。", [row(button(`practice:add-as-trial:${id.split(":")[2]}`, "体験", 3), button(`practice:add-as-guest:${id.split(":")[2]}`, "ゲスト", 2))]);
+  if (id.startsWith("practice:add-as-trial:")) return modalResponse(`practice-add-trial:${id.split(":")[1]}`, "体験追加", [textInput("name", "名前"), textInput("time", "参加時間（任意）", "", false), textInput("note", "メモ（任意）", "", false)]);
+  if (id.startsWith("practice:add-as-guest:")) return modalResponse(`practice-add-guest:${id.split(":")[1]}`, "ゲスト追加", [textInput("name", "名前"), textInput("time", "参加時間（任意）", "", false), textInput("note", "メモ（任意）", "", false)]);
   if (id.startsWith("practice:register:")) return await practiceSelfRegister(i, env, id.split(":")[2]);
   if (id.startsWith("practice:register-as:")) return await practiceRegisterAs(i, env, id.split(":")[2], id.split(":")[3]);
   if (id.startsWith("practice:set-status:")) return await setPracticeStatus(i, env, id.split(":")[2], decodeURIComponent(id.split(":").slice(3).join(":")));
@@ -323,13 +297,21 @@ async function handleModal(i, env) {
     await saveActivity(env, date, a);
     return messageResponse(await buildActivityAdminText(env, date), activityAdminButtons(date));
   }
-  if (id.startsWith("activity-add-person:")) {
+  if (id.startsWith("activity-add-person-trial:")) {
     if (!(await isOperation(i, env))) return ephemeral("運営専用です。");
-    return await addExternalPerson(i, env, "activity", id.split(":")[1], { ...values, category: id.split(":")[2] });
+    return await addExternalPerson(i, env, "activity", id.split(":")[1], { ...values, category: "trial" });
   }
-  if (id.startsWith("practice-add:")) {
+  if (id.startsWith("activity-add-person-guest:")) {
     if (!(await isOperation(i, env))) return ephemeral("運営専用です。");
-    return await addExternalPerson(i, env, "practice", id.split(":")[1], { ...values, category: id.split(":")[2] });
+    return await addExternalPerson(i, env, "activity", id.split(":")[1], { ...values, category: "guest" });
+  }
+  if (id.startsWith("practice-add-trial:")) {
+    if (!(await isOperation(i, env))) return ephemeral("運営専用です。");
+    return await addExternalPerson(i, env, "practice", id.split(":")[1], { ...values, category: "trial" });
+  }
+  if (id.startsWith("practice-add-guest:")) {
+    if (!(await isOperation(i, env))) return ephemeral("運営専用です。");
+    return await addExternalPerson(i, env, "practice", id.split(":")[1], { ...values, category: "guest" });
   }
   if (id.startsWith("settings-save:")) return await saveSettingsModal(i, env, id.split(":")[1], values);
   return ephemeral("不明な入力です。");
@@ -664,12 +646,7 @@ async function sendWeeklyReminders(env,weekKey) {
   const s=await getSettings(env); const w=await getWeekly(env,weekKey); const start=weekDates(weekKey)[0]; const end=weekDates(weekKey)[6]; const members=await listGuildMembers(env); for(const m of members){const cat=categoryFromMember(m,s);if(![CATEGORY.MEMBER,CATEGORY.SUPPORT].includes(cat))continue;const registered=weekDates(weekKey).some(d=>w.days[d]?.[m.user.id]);if(!registered)await dm(env,m.user.id,"📅 Club Oneの来週予定がまだ登録されていません。予定登録用チャンネルから登録してください。");}
 }
 async function sendDayConfirmations(env,date) {
-  const a=await getActivity(env,date);
-  if(a.status!=="recruiting"&&a.status!=="active") return;
-  for(const p of Object.values(a.participants)){
-    if(p.status==="cancelled"||p.external||!p.userId||p.time==="22:00") continue;
-    await dm(env,p.userId,`⚽ 本日のClub One活動\n📅 ${date}\n\n参加時間を選択してください。`,activityDmButtons(date));
-  }
+  const a=await getActivity(env,date); if(a.status!=="recruiting"&&a.status!=="active")return; for(const p of Object.values(a.participants)){if(p.status==="cancelled"||p.external||p.time==="22:00")continue;if(p.source==="weekly-auto"&&p.userId)await dm(env,p.userId,`⚽ 本日のClub One活動\n📅 ${date}\n\n参加時間を選択してください。`,activityDmButtons(date));}
 }
 function activityDmButtons(date){return chunkRows(ACTIVITY_TIMES.map(t=>button(`activity:confirm:${date}:${encodeURIComponent(t)}`,t,t==="不参加"?4:3)),5);}
 async function listGuildMembers(env){const out=[];for(let after="0";;){const page=await discordRequest(env,`/guilds/${env.DISCORD_GUILD_ID}/members?limit=1000&after=${after}`);if(!page.length)break;out.push(...page);if(page.length<1000)break;after=page[page.length-1].user.id;}return out;}
